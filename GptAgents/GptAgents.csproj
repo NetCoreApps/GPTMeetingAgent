@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="ServiceStack.Common" Version="6.8.0" />
+      <PackageReference Include="ServiceStack.Interfaces" Version="6.8.0" />
+      <PackageReference Include="ServiceStack.Text" Version="6.8.0" />
+      <PackageReference Include="SharpToken" Version="1.0.25" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,47 @@
+<header class="border-b border-gray-200 dark:border-gray-600 pr-3">
+    <div class="flex flex-wrap items-center">
+        <div class="absolute z-10 top-2 left-2 sm:static flex-shrink flex-grow-0">
+            <div class="cursor-pointer">
+                <a class="navbar-brand flex items-center" href="/">
+                    <img class="w-8 h-8 sm:ml-2 sm:w-12 sm:h-12" src="/img/robot.svg" alt="GptMeetingAgent logo">
+                    <span class="hidden sm:block text-2xl font-semibold px-4">GPT Meeting Agent</span>
+                </a>
+            </div>
+        </div>
+        <div class="flex flex-grow flex-shrink flex-nowrap justify-end items-center">
+            <nav class="relative flex flex-grow leading-6 font-semibold text-slate-700 dark:text-slate-200">
+                <ul class="flex flex-wrap items-center justify-end w-full m-0 pb-2 sm:pb-0">
+                    @{
+                        var isAuthenticated = await Html.IsAuthenticatedAsync();
+                        var isAdmin = await Html.HasRoleAsync("Admin");
+                        void RenderNavLink(string href, string childContent, string? cls = null)
+                        {
+                            <li class="@Html.ClassNames("relative flex flex-wrap just-fu-start m-0",cls)">
+                                <a href="@href" class="@Html.ClassNames("p-4 flex items-center justify-start mw-full hover:text-sky-500 dark:hover:text-sky-400", 
+                                    Html.MatchesPath(href) ? "text-blue-700 dark:text-blue-300" : "")">
+                                    @Html.Raw(childContent)
+                                </a>
+                            </li>
+                        }
+                        void RenderLinkButton(string href, string childContent, string? cls = null)
+                        {
+                            <li class="relative flex flex-wrap just-fu-start m-0">
+                                <a href="@href" class="@(cls ?? Css.SecondaryButton)">
+                                    @Html.Raw(childContent)
+                                </a>
+                            </li>
+                        }
+
+                        // Uses prerendered /blog for production
+                        RenderNavLink(Html.IsDebug() ? "/posts/chat-gpt-agents" : "/blog/", "About", "ml-8 sm:ml-0");
+                    }
+                </ul>
+            </nav>
+
+        </div>
+    </div>
+</header>
+<script type="module">
+import { mountAll } from "/mjs/app.mjs"
+mountAll()
+</script>

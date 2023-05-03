@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TypeScriptCompileBlocked>true</TypeScriptCompileBlocked>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="GptMeetingAgent" />
+    <Using Include="ServiceStack" />
+    <Using Include="ServiceStack.Mvc" />
+  </ItemGroup>
+
+  <!-- dotnet watch support -->
+  <Target Name="RazorWatch" BeforeTargets="_CoreCollectWatchItems">
+    <ItemGroup>
+      <RazorWatch Include="**\*.cshtml" />
+      <Watch Include="%(RazorWatch.FullPath)" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Bogus" Version="34.0.2" />
+    <PackageReference Include="Markdig" Version="0.30.*" />
+    <PackageReference Include="ServiceStack" Version="6.*" />
+    <PackageReference Include="ServiceStack.Mvc" Version="6.*" />
+    <PackageReference Include="ServiceStack.Server" Version="6.*" />
+    <PackageReference Include="ServiceStack.OrmLite.Sqlite.Data" Version="6.*" />
+      
+    <!-- Required for Razor compilation on change: https://docs.microsoft.com/en-us/aspnet/core/mvc/views/view-compilation?view=aspnetcore-5.0 -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="6.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GptAgents\GptAgents.csproj" />
+    <ProjectReference Include="..\GptMeetingAgent.ServiceInterface\GptMeetingAgent.ServiceInterface.csproj" />
+    <ProjectReference Include="..\GptMeetingAgent.ServiceModel\GptMeetingAgent.ServiceModel.csproj" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <Folder Include="App_Data\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="wwwroot\lib\js\htmx.js" />
+    <_ContentIncludedByDefault Remove="wwwroot\lib\js\htmxclasses.js" />
+    <_ContentIncludedByDefault Remove="Pages\Admin\Index.cshtml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Prompts\BasePromptExample.txt" />
+    <Content Include="Prompts\BasePromptExample.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Prerender tasks run in release.yml -->
+  <Target Name="AppTasks" AfterTargets="Build" Condition="$(APP_TASKS) != ''">
+    <CallTarget Targets="Prerender" Condition="$(APP_TASKS.Contains('prerender'))" />
+  </Target>
+  <Target Name="Prerender">
+    <Message Text="Prerender..." />
+    <Exec Command="dotnet run --AppTasks=prerender" />
+  </Target>
+
+</Project>

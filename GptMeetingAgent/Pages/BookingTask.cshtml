@@ -1,0 +1,28 @@
+@page "/tasks/{Id:int}"
+@model BookingTaskModel
+@{
+    ViewData["Title"] = "Task";
+}
+
+<div id="app">
+    <chat-app :task-id="taskId" />
+</div>
+
+<script type="module">
+import {onMounted, ref} from "vue"
+import {mount} from "/mjs/app.mjs"
+import {useClient, useMetadata} from "@@servicestack/vue" 
+
+const App = {
+    setup() {
+        const taskId = ref(@Model.Id);
+        console.log(taskId.value)
+        
+        return {
+        taskId
+        }
+    },
+}
+
+mount('#app', App)
+</script>
