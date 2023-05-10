@@ -16,6 +16,28 @@ public class OpenAiChatGptAgent : ILanguageModelAgent
 
     public int TokenLimit { get; set; }
     
+    public GptEncoding Encoding { get; set; } = GptEncoding.GetEncoding("cl100k_base");
+
+    /// <summary>
+    /// The integration relies on the response format specified in this prompt.
+    /// </summary>
+    public string OutputPrompt { get; set; } = @"You must *only respond in JSON* format, as described below.
+
+RESPONSE FORMAT:
+{
+    ""command"": {
+        ""name"": ""command name"",
+        ""body"": {}
+    },
+    ""thoughts"": {
+        ""text"": ""thought"",
+        ""reasoning"": ""reasoning"",
+        ""plan"": ""- short bulleted\n- list that conveys\n- long-term plan"",
+        ""criticism"": ""constructive self-criticism"",
+        ""speak"": ""thoughts summary to say to user""
+    }
+}";
+    
     protected const string BaseUrl = "https://api.openai.com/v1/chat/completions";
 
     private ILog? _logger;
@@ -80,7 +102,6 @@ public class OpenAiChatGptAgent : ILanguageModelAgent
             }
         };
         
-
         // Amount for response
         currentTokensUsed += 500;
         var msgHistory = history.Where(x => ValidChatGptRoles.Contains(x.Role))
@@ -100,6 +121,12 @@ public class OpenAiChatGptAgent : ILanguageModelAgent
                 nextMsgHistoryToAddIndex++;
             }
         }
+        
+        messages.Add(new()
+        {
+            Role = "system",
+            Content = OutputPrompt
+        });
 
         messages.Add(new ChatMessage
         {
@@ -119,6 +146,8 @@ public class OpenAiChatGptAgent : ILanguageModelAgent
             max_tokens = 500,
             temperature = 0.0
         };
+        
+        _logger.Debug($"Chat request: {requestData.messages.Select(x => $"{x.Role}:\n{x.Content}").ToList().Join("\n\n")}");
         
         var response = await client.PostAsJsonAsync(BaseUrl, requestData);
         var responseString = await response.Content.ReadAsStringAsync();
@@ -160,8 +189,7 @@ public class OpenAiChatGptAgent : ILanguageModelAgent
     /// <returns></returns>
     public virtual int GetTokenCount(string text)
     {
-        var encoding = GptEncoding.GetEncoding("cl100k_base");
-        return encoding.Encode(text).Count;
+        return Encoding.Encode(text).Count;
     }
 
     public List<string> ValidChatRoles => ValidChatGptRoles;

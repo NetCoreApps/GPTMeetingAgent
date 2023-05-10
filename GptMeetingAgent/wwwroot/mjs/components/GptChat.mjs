@@ -53,12 +53,11 @@ export default {
 </div>`
     ,
     emits: ['autoFormSuccess'],
-    props: ['chatHistory', 'loading', 'task', 'calendarEventId'],
+    props: ['chatHistory', 'loading', 'task'],
     setup(props, context) {
         const chatHistory = toRef(props, 'chatHistory');
         const loading = toRef(props, 'loading');
         const task = toRef(props, 'task');
-        const calendarEventId = toRef(props, 'calendarEventId');
         const nameMapping = {
             'Agent': 'Bookings Assistant Agent',
             'Human': 'Me'

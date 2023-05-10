@@ -5,7 +5,7 @@ using ServiceStack.NativeTypes.TypeScript;
 
 namespace GptMeetingAgent;
 
-public class ChatAgentFeature : IPlugin, IPostInitPlugin
+public class GptAgentFeature : IPlugin, IPostInitPlugin
 {
     private Dictionary<string, string> AgentServiceCommands { get; set; } = new();
     
@@ -19,7 +19,7 @@ public class ChatAgentFeature : IPlugin, IPostInitPlugin
     public void AfterPluginsLoaded(IAppHost appHost)
     {
         var metadata = appHost.Metadata;
-        var _logger = appHost.Resolve<ILoggerFactory>().CreateLogger(typeof(ChatAgentFeature));
+        var _logger = appHost.Resolve<ILoggerFactory>().CreateLogger(typeof(GptAgentFeature));
         foreach (var agentName in AgentFactories.Keys)
         {
             // Each agent has its own set of accessible services
@@ -137,10 +137,10 @@ public class ChatAgentFeature : IPlugin, IPostInitPlugin
     /// TODO - GptAgentData PromptBase should have a fallback default
     /// </summary>
     /// <param name="gptAgentData"></param>
-    /// <param name="serviceTags"></param>
+    /// <param name="includeApis"></param>
     /// <param name="agentFactory"></param>
     /// <exception cref="ArgumentException"></exception>
-    public void RegisterAgent(GptAgentData gptAgentData, List<string> serviceTags, Func<GptAgentData, ILanguageModelAgent> agentFactory)
+    public GptAgentFeature RegisterAgent(GptAgentData gptAgentData, List<string> includeApis, Func<GptAgentData, ILanguageModelAgent> agentFactory)
     {
         if(gptAgentData.Name.IsNullOrEmpty())
             throw new Exception("Agent must have a name");
@@ -149,19 +149,21 @@ public class ChatAgentFeature : IPlugin, IPostInitPlugin
 
         AgentFactories[gptAgentData.Name] = agentFactory;
         
-        AgentServiceCommandTags[gptAgentData.Name] = serviceTags;
+        AgentServiceCommandTags[gptAgentData.Name] = includeApis;
         
         AgentDataMappings[gptAgentData.Name] = gptAgentData;
+        return this;
     }
     
     private Dictionary<string, GptAgentData> AgentDataMappings { get; set; } = new();
 
     private Dictionary<string, Func<object,object>> AgentCommandResultFilters { get; set; } = new();
 
-    public void RegisterCommandFilter<T>(Func<object,object> filter)
+    public GptAgentFeature RegisterCommandTransform<T>(Func<object,object> filter)
     {
         var commandName = typeof(T).Name;
         AgentCommandResultFilters[commandName] = filter;
+        return this;
     }
     
     public object TransformCommandResponse(AgentCommand? command, object response)

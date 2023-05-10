@@ -5,7 +5,7 @@ namespace GptMeetingAgent.ServiceModel;
 
 [Route("/hello")]
 [Route("/hello/{Name}")]
-[Tag("Teams"),Description("A Hello World Service")]
+//[Tag(Tags.Teams),Description("A Hello World Service")]
 public class Hello : IReturn<HelloResponse>
 {
     public string? Name { get; set; }

@@ -3,7 +3,8 @@ using ServiceStack.DataAnnotations;
 
 namespace GptMeetingAgent.ServiceModel;
 
-[Tag("Calendar"), Description("Create a meeting"), ConfirmationRequired("Are you sure you want to create a meeting?")]
+[Tag(Tags.Calendar), Description("Create a meeting")]
+[ConfirmationRequired("Are you sure you want to create a meeting?")]
 public class CreateCalendarEvent : IReturn<CreateCalendarEventResponse>
 {
     public string Subject { get; set; }
@@ -13,7 +14,7 @@ public class CreateCalendarEvent : IReturn<CreateCalendarEventResponse>
     [Input(Type = "datetime-local")]
     public DateTime End { get; set; }
     public string AttendeeEmail { get; set; }
-    // public int? MeetingRoomId { get; set; }
+    public int? MeetingRoomId { get; set; }
 }
 
 // Response objects

@@ -1,6 +1,5 @@
 ﻿using GptAgents;
 using ServiceStack.OrmLite;
-using ServiceStack.Text;
 
 namespace GptMeetingAgent;
 
@@ -34,7 +33,7 @@ public class ChatGptAgentService : Service
 
     public async Task<object> Post(CreateStoredAgent request)
     {
-        var feature = HostContext.GetPlugin<ChatAgentFeature>();
+        var feature = HostContext.GetPlugin<GptAgentFeature>();
         var agent = feature.CreateAgent(request.AgentType);
         var agentData = agent.Data.ConvertTo<StoredAgentData>();
         var agentId = await Db.InsertAsync(agentData, selectIdentity: true);
@@ -68,6 +67,13 @@ public class ChatGptAgentService : Service
 
     /// <summary>
     /// Filter the message history to only include chat messages that are valid for the GPT agent.
+    /// Messages intended to display to the user and include as history for the LLM agent as
+    /// given different roles. This follows the OpenAI Chat API where the roles are:
+    /// "system", "user", "assistant".
+    /// UI roles are "Human", "Agent".
+    /// They are case sensitive.
+    /// Non-OpenAI LLMs can still use "system", "user", "assistant" as roles, but how that is
+    /// passed to the LLM will depend on the implementation.
     /// TODO: This is currently tightly coupled to OpenAiChatGptAgent.
     /// </summary>
     /// <param name="taskId"></param>
@@ -90,6 +96,13 @@ public class ChatGptAgentService : Service
     /// <summary>
     /// Get the chat history to display to the User.
     /// Additional chat messages are added to the history to provide context for the user.
+    /// Messages intended to display to the user and include as history for the LLM agent prompt, are
+    /// given different roles. This follows the OpenAI Chat API where the roles are:
+    /// "system", "user", "assistant".
+    /// UI roles are "Human", "Agent".
+    /// They are case sensitive.
+    /// Non-OpenAI LLMs can still use "system", "user", "agent" as roles, but how that is
+    /// passed to the LLM will depend on the implementation.
     /// </summary>
     /// <param name="taskId"></param>
     /// <returns></returns>
@@ -124,7 +137,7 @@ public class ChatGptAgentService : Service
             ? memoryKeys.ToDictionary(x => x.Replace(memoryKeyPrefix,""), x => Cache.Get<string>(x))
             : new Dictionary<string, string>();
 
-        var feature = HostContext.GetPlugin<ChatAgentFeature>();
+        var feature = HostContext.GetPlugin<GptAgentFeature>();
 
 
         if (request.Command?.Name.IsNullOrEmpty() == false && request.CommandResponse != null)
@@ -143,20 +156,7 @@ public class ChatGptAgentService : Service
             });
         }
 
-        if (request.UserPrompt != null && request.UserPrompt.IsEmpty() == false)
-        {
-            // Insert human message into chat history.
-            var humanMessage = new StoredChatMessage
-            {
-                Role = "Human",
-                Content = request.UserPrompt,
-                StoredAgentTaskId = agentTask.Id
-            };
-            await Db.SaveAsync(humanMessage);
-        }
-        
         var agent = feature.CreateAgent(agentData.Name);
-        //agent.Data = agentData; // Confirm if needed.
         var chatHistory = await GetHistoryForGpt(agentTask.Id);
         var chatResponse = await agent.ChatAsync(
             new List<AgentTask> { agentTask },
@@ -164,41 +164,9 @@ public class ChatGptAgentService : Service
             memory,
             userPrompt: request.UserPrompt.IsNullOrEmpty() ? null : request.UserPrompt
         );
-
+        
+        var command = await PersistInteraction(request.UserPrompt, agentTask, chatResponse);
         var skipCommand = HandleInternalCommands(chatResponse, agentTask);
-        if (skipCommand)
-        {
-            // Store the command response in the chat history
-            // So that the agent knows they acted on the command.
-            Db.Save(new StoredChatMessage
-            {
-                Role = "system",
-                Content = chatResponse.Thoughts.GetAgentThoughtText(),
-                StoredAgentTaskId = agentTask.Id
-            });
-        }
-        
-        var chatMessage = new StoredChatMessage
-        {
-            Role = "Agent",
-            Content = chatResponse.Thoughts.GetAgentThoughtText(),
-            StoredAgentTaskId = agentTask.Id
-        };
-        var messageId = Db.Insert(chatMessage, selectIdentity: true);
-        chatMessage.Id = (int)messageId;
-
-        StoredAgentCommand? command = null;
-        if (chatResponse.Command != null)
-        {
-            command = new StoredAgentCommand
-            {
-                StoredChatMessageId = chatMessage.Id,
-                Name = chatResponse.Command.Name,
-                Body = chatResponse.Command.Body
-            };
-            Db.Save(command);
-        }
-        
         if (chatResponse.Command is { Name: "CompleteTask" })
         {
             agentTask.Completed = true;
@@ -244,7 +212,7 @@ public class ChatGptAgentService : Service
     /// <exception cref="Exception"></exception>
     public async Task<object> Post(StartGptAgentTask request)
     {
-        var feature = HostContext.GetPlugin<ChatAgentFeature>();
+        var feature = HostContext.GetPlugin<GptAgentFeature>();
         ILanguageModelAgent? agent;
         int agentId;
         if (request.AgentId != null)
@@ -285,55 +253,8 @@ public class ChatGptAgentService : Service
             new()
         );
         
-
-        storedAgentTask.StoredAgentDataId = agentData.Id;
-        var taskId = Db.Insert(storedAgentTask, selectIdentity: true);
-        var task = Db.SingleById<StoredAgentTask>(taskId);
-        
-        // Insert human message into chat history.
-        var humanMessage = new StoredChatMessage
-        {
-            Role = "Human",
-            Content = request.Prompt,
-            StoredAgentTaskId = task.Id
-        };
-        await Db.SaveAsync(humanMessage);
-
-        var chatHistory = history.Select(
-            x => new StoredChatMessage
-            {
-                Role = x.Role,
-                Content = x.Content,
-                // Flag if the content is JSON.
-                // Content from the assistant is JSON.
-                ContentIsJson = x.Role == "assistant",
-                StoredAgentTaskId = task.Id
-            }).ToList();
-        
-        await Db.SaveAllAsync(chatHistory);
-
-        var chatMessage = new StoredChatMessage
-        {
-            Role = "Agent",
-            Content = chatResponse.Thoughts.GetAgentThoughtText(),
-            StoredAgentTaskId = task.Id
-        };
-        var messageId = Db.Insert(chatMessage, selectIdentity: true);
-        chatMessage.Id = (int)messageId;
-
-        // Store command for audit/replay purposes.
-        StoredAgentCommand? command = null;
-        if (chatResponse.Command != null)
-        {
-            command = new StoredAgentCommand
-            {
-                StoredChatMessageId = chatMessage.Id,
-                Name = chatResponse.Command.Name,
-                Body = chatResponse.Command.Body
-            };
-            Db.Save(command);
-        }
-        
+        var task = await PersistTask(storedAgentTask, agentData);
+        var command = await PersistInteraction(request.Prompt, task, chatResponse);
         var skipCommand = HandleInternalCommands(chatResponse, task);
         if (skipCommand)
         {
@@ -362,7 +283,67 @@ public class ChatGptAgentService : Service
             Question = hasQuestion
         };
     }
-    
+
+    private async Task<StoredAgentTask> PersistTask(StoredAgentTask storedAgentTask, StoredAgentData agentData)
+    {
+        storedAgentTask.StoredAgentDataId = agentData.Id;
+        var taskId = await Db.InsertAsync(storedAgentTask, selectIdentity: true);
+        var task = await Db.SingleByIdAsync<StoredAgentTask>(taskId);
+        return task;
+    }
+
+    private async Task<StoredAgentCommand?> PersistInteraction(string? prompt, StoredAgentTask task, AgentChatResponse chatResponse)
+    {
+        if (prompt != null && !prompt.IsEmpty())
+        {
+            // Insert human message into chat history.
+            var humanMessage = new StoredChatMessage
+            {
+                Role = "Human",
+                Content = prompt,
+                StoredAgentTaskId = task.Id
+            };
+            var userMessage = new StoredChatMessage
+            {
+                Role = "user",
+                Content = prompt,
+                StoredAgentTaskId = task.Id
+            };
+            await Db.SaveAsync(humanMessage);
+            await Db.SaveAsync(userMessage);
+        }
+        
+        await Db.SaveAsync(new StoredChatMessage
+        {
+            Role = "assistant",
+            Content = chatResponse.Thoughts.ToJson(),
+            StoredAgentTaskId = task.Id
+        });
+        var chatMessage = new StoredChatMessage
+        {
+            Role = "Agent",
+            Content = chatResponse.Thoughts.GetAgentThoughtText(),
+            StoredAgentTaskId = task.Id
+        };
+        var messageId = Db.Insert(chatMessage, selectIdentity: true);
+        chatMessage.Id = (int)messageId;
+
+        // Store command for audit/replay purposes.
+        StoredAgentCommand? command = null;
+        if (chatResponse.Command != null)
+        {
+            command = new StoredAgentCommand
+            {
+                StoredChatMessageId = chatMessage.Id,
+                Name = chatResponse.Command.Name,
+                Body = chatResponse.Command.Body
+            };
+            Db.Save(command);
+        }
+
+        return command;
+    }
+
     /// <summary>
     /// Handle internal commands that are not to be executed by the client on behalf of the agent.
     /// These commands are handled by the server.

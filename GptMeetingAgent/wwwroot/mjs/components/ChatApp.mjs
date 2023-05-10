@@ -1,5 +1,4 @@
 import {onMounted, ref} from "vue"
-import {mount} from "/mjs/app.mjs"
 import {
     ContinueGptAgentTask,
     ListChatHistoryForTask,

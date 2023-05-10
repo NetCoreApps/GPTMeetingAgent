@@ -13,7 +13,7 @@ public class TeamUser
     public string ProfileUrl { get; set; }
 }
 
-[Tag("Teams"), Description("Search for users by first or last name and get back their IDs and emails")]
+[Tag(Tags.Teams), Description("Search for users by first or last name and get back their IDs and emails")]
 public class SearchUsers : IReturn<SearchUsersResponse>
 {
     public string Name { get; set; }
@@ -29,7 +29,7 @@ public class QueryTeamUser : QueryDb<TeamUser>
 }
 
 
-[Tag("Teams"), Description("Get a user's schedule")]
+[Tag(Tags.Teams), Description("Get a user's schedule")]
 //[ConfirmationRequired("Are you sure you want to get user schedule?")]
 public class GetUserSchedule : IReturn<GetUserScheduleResponse>
 {
@@ -122,8 +122,15 @@ public class MeetingRoom
     public List<string> Resources { get; set; }
 }
 
-[Tag("Teams"), Description("Get a list of meeting rooms and their resources.")]
- public class ListMeetingRooms : QueryDb<MeetingRoom>
- {
-     
- }
+[Tag(Tags.Teams), Description("Get a list of meeting rooms and their resources.")]
+public class ListMeetingRooms : QueryDb<MeetingRoom>
+{
+ 
+}
+
+
+public static class Tags
+{
+    public const string Teams = "Teams";
+    public const string Calendar = "Calendar";
+}
