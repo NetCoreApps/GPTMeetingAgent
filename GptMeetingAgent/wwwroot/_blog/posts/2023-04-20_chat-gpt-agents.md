@@ -261,7 +261,7 @@ You can checkout our [live demo of this example here](https://gptmeetings.netcor
 
 ## Request for Feedback
 
-We are [releasing this project]() as a proof of concept to get feedback from the community on how they would like to use this technology in their own projects.
+We are [releasing this project](https://github.com/NetCoreApps/GPTMeetingAgent) as a proof of concept to get feedback from the community on how they would like to use this technology in their own projects.
 We plan on continuing to develop examples and documentation for a generic pattern to make this type of development easier to integrate by building a plugin similar to that in the GptMeetingAgent project.
 
 We would love to hear your feedback on this project, and how you would like to use it in your own projects.
