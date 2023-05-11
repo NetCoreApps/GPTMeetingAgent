@@ -347,6 +347,10 @@ public class ChatGptAgentService : Service
     /// <summary>
     /// Handle internal commands that are not to be executed by the client on behalf of the agent.
     /// These commands are handled by the server.
+    /// This just manually string matches the CommandName against a list of known commands to persist
+    /// the values in the Command.Body to the ICacheClient.
+    /// This might want to move to dedicated services so there are no differences between `ServiceCommands`
+    /// and `Commands`.
     /// </summary>
     /// <param name="chatResponse"></param>
     /// <param name="agentTask"></param>
