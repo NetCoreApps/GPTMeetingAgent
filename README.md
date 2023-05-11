@@ -1,18 +1,52 @@
-# vue-mjs
+# GPT Meeting Agent
 
-.NET 6.0 Simple, modern Vue 3 App using JS modules
+This is a proof of concept application showing the use of OpenAI's APIs and the `gpt-3.5-turbo` model to act as a generic Agent to solve problems with your internal APIs.
 
-[![](https://raw.githubusercontent.com/ServiceStack/Assets/master/csharp-templates/vue-mjs.png)](http://vue-mjs.web-templates.io/)
+## GptAgentFeature Plugin
 
-> Browse [source code](https://github.com/NetCoreTemplates/razor), view live demo [vue-mjs.web-templates.io](http://vue-mjs.web-templates.io) and install with [dotnet-new](https://docs.servicestack.net/dotnet-new):
+By leveraging techniques like Chain of Thought, In Context Learning and other Prompt Engineering methods, we are able to customize the Agents behavior.
+The `GptAgentFeature` plugin enables us to use the `RegisterAgent` method to customize this behavior as well as which of your internal ServiceStack each Agent has access to invoke.
 
-    $ dotnet tool install -g x
+```csharp
+host.Plugins.Add(new GptAgentFeature().RegisterAgent(new GptAgentData
+{
+    Name = "BookingAgent",
+    PromptBase = File.ReadAllText($"{Path.Combine("Prompts", "BasePromptExample.txt")}"),
+    Role = @"
+    An AI that makes meeting bookings between staff, ensuring their schedules do not have conflicting events.
+    Always make bookings in the future.Ensure the booking is on the requested day.
+    When checking schedules, check the next 7 days, including today."
+},
+agentFactory: agentData => new OpenAiChatGptAgent(chatGptApiKey, agentData),
+includeApis: new()
+{
+    Tags.Teams,
+    Tags.Calendar,
+})
+```
 
-    $ x new vue-mjs ProjectName
+The `Role` property on the `GptAgentData` primes the Agent to work on a specific task, in this case booking a meeting between two staff members.
+This is combined with a generic `PromptBase` that contains instructions for our agent to be able to handle the ServiceStack API integrations.
 
-Alternatively write new project files directly into an empty repository, using the Directory Name as the ProjectName:
+The `includeApis` is a list of `Tag` names used with your own Request DTOs using the `[Tag]` attribute.
+Tags are matched to inject information into the prompt sent to the Large Language Model (LLM) so that it is aware of what tools are available,
+as well as a `[Description]` of what each API does. The `[Description]` tag is very important, as it will be the context the Agent uses about when to reach for your API.
 
-    $ git clone https://github.com/<User>/<ProjectName>.git
-    $ cd <ProjectName>
-    $ x new vue-mjs
+## Live Demo
+
+We have a live demo of the [GptMeetingAgent](https://gptmeetings.netcore.io) you can try out.
+
+## Run it yourself
+
+To run this proof of concept, you will need an API key from OpenAI populated in the `CHATGPT_API_KEY` environment variable or populated in the `Configure.Gpt.cs` file.
+You will also need to run the `migrate` AppTask to initialize the database using the command `npm run migrate`.
+
+## Feedback
+
+We are looking to develop a highly reusable set of components to leverage this technology and looking for feedback about how developers are using these types of integrations.
+
+As this example shows, we have a generic ServiceStack Plugin that can be used to dynamically create UIs related to the command the Agent decides to use.
+We think this combination of UI and Server components creates an interesting new method of development that we are interested exploring more in the future.
+
+Please reach out to us on Discord, GitHub Discussions, Customer Forums or YouTube comments with your use cases, and details about how you want to leverage large language models within your systems.
 
