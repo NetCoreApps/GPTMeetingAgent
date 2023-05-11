@@ -2,7 +2,7 @@
 title: Leveraging ChatGPT Agents with ServiceStack
 summary: A walkthrough of how to enable ChatGPT Agents with access to your own ServiceStack APIs
 tags: servicestack, gpt, chatbot, ai
-splash: https://images.unsplash.com/photo-1533090161767-e6ffed986c88?crop=entropy&fit=crop&h=1000&w=2000
+splash: /img/chatgpt-example/office-agent-assistant-2-wide.png
 draft: true
 author: Darren Reid
 ---
