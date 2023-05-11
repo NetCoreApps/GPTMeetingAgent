@@ -120,6 +120,7 @@ jobs:
           APP_NAME: ${{ github.event.repository.name }}
           HOST_DOMAIN: ${{ secrets.DEPLOY_HOST }}
           LETSENCRYPT_EMAIL: ${{ env.letsencrypt_email }}
+          CHATGPT_API_KEY: ${{ secrets.CHATGPT_API_KEY }}
         with:
           input: .deploy/docker-compose-template.yml
           output: .deploy/${{ github.event.repository.name }}-docker-compose.yml
