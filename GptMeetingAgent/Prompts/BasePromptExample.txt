@@ -17,4 +17,4 @@ COMMANDS:
 
 SERVICE COMMANDS:
 
-$SERVICE_COMMANDS$
+{{ $serviceCommands }}

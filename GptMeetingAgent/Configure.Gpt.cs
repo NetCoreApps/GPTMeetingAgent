@@ -24,7 +24,7 @@ public class ConfigureGpt : IHostingStartup
 
             host.Register(kernel);
             
-            host.Plugins.Add(new GptAgentFeature().RegisterAgent(new GptAgentData
+            host.Plugins.Add(new GptAgentFeature(kernel).RegisterAgent(new GptAgentData
                 {
                     Name = "BookingAgent",
                     Role = @"

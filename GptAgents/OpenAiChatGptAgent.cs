@@ -1,7 +1,10 @@
 ﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.Serialization;
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.AI.ChatCompletion;
+using Microsoft.SemanticKernel.TemplateEngine.Blocks;
 using ServiceStack;
 using ServiceStack.Logging;
 using SharpToken;
@@ -224,6 +227,49 @@ public class GptAgentData
     public string PromptBase { get; set; }
     public string Name { get; set; }
     public string Role { get; set; }
+    
+    public ConstraintsBlock Constraints { get; set; }
+    
+}
+
+public class InternalCommandsBlock : Block
+{
+    public InternalCommandsBlock(string? content, ILogger? log = null) : base(content, log)
+    {
+    }
+
+    private static string? BuildContent(string? content)
+    {
+        if (content.IsNullOrEmpty())
+            return null;
+        return @$"COMMANDS:";
+    }
+
+    public override bool IsValid(out string errorMsg)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+public class ConstraintsBlock : Block
+{
+    public ConstraintsBlock(List<string?> constraints, ILogger? log = null) : base(BuildConstraints(constraints), log)
+    {
+    }
+    
+    private static string? BuildConstraints(List<string?> constraints)
+    {
+        if (constraints.IsNullOrEmpty())
+            return null;
+        return @$"CONSTRAINTS: 
+{constraints.Where(x => !x.IsNullOrEmpty()).Select(x => $"- {x}").Join("\n")}";
+    }
+
+    public override bool IsValid(out string errorMsg)
+    {
+        errorMsg = "";
+        return true;
+    }
 }
 
 public interface ILanguageModelAgent

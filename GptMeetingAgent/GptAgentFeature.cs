@@ -1,17 +1,25 @@
 ﻿using GptAgents;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Orchestration;
+using Microsoft.SemanticKernel.TemplateEngine.Blocks;
 using ServiceStack.DataAnnotations;
 using ServiceStack.Logging;
 using ServiceStack.NativeTypes.TypeScript;
+using ServiceStack.Text;
 
 namespace GptMeetingAgent;
 
 public class GptAgentFeature : IPlugin, IPostInitPlugin
 {
+    private readonly IKernel _kernel;
     public Dictionary<string, string> AgentServiceCommands { get; set; } = new();
     
     private Dictionary<string, List<string>> AgentServiceCommandTags { get; set; } = new();
+
+    public GptAgentFeature(IKernel kernel)
+    {
+        _kernel = kernel;
+    }
     
     public void Register(IAppHost appHost)
     {
@@ -113,14 +121,16 @@ public class GptAgentFeature : IPlugin, IPostInitPlugin
 
     public Dictionary<string, Func<GptAgentData, ILanguageModelAgent>> AgentFactories = new();
 
-    public ILanguageModelAgent CreateAgent(string agentName)
+    public async Task<ILanguageModelAgent> CreateAgentAsync(string agentName)
     {
         var factory = AgentFactories[agentName];
         var data = AgentDataMappings[agentName];
         var agent = factory(data);
         // Replace Service Commands
         var prompt = agent.Data.PromptBase;
-        agent.Data.PromptBase = prompt.Replace("$SERVICE_COMMANDS$",AgentServiceCommands[agentName]);
+        var context = new SKContext();
+        context["serviceCommands"] = AgentServiceCommands[agentName];
+        agent.Data.PromptBase = await _kernel.PromptTemplateEngine.RenderAsync(prompt,context);
         return agent;
     }
     

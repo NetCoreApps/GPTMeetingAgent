@@ -44,7 +44,7 @@ public class ChatGptAgentService : Service
     public async Task<object> Post(CreateStoredAgent request)
     {
         var feature = HostContext.GetPlugin<GptAgentFeature>();
-        var agent = feature.CreateAgent(request.AgentType);
+        var agent = await feature.CreateAgentAsync(request.AgentType);
         var agentData = agent.Data.ConvertTo<StoredAgentData>();
         var agentId = await Db.InsertAsync(agentData, selectIdentity: true);
         agentData.Id = (int)agentId;
@@ -169,7 +169,7 @@ public class ChatGptAgentService : Service
             await Db.SaveAsync(request.Command);
         }
 
-        var agent = feature.CreateAgent(agentData.Name);
+        var agent = await feature.CreateAgentAsync(agentData.Name);
         var localHistory = await GetHistoryForGpt(agentTask.Id);
         var chatHistory = await agent.ConstructChat(
             new List<AgentTask> { agentTask },
@@ -183,7 +183,8 @@ public class ChatGptAgentService : Service
         var chatCompletionService = Kernel.GetService<IChatCompletion>();
         var result = await chatCompletionService.GenerateMessageAsync(chatHistory, new ChatRequestSettings
         {
-            Temperature = 0.0
+            Temperature = 0.0,
+            MaxTokens = 512
         });
         var chatResponse = agent.ParseResponse(result);
 
@@ -247,7 +248,7 @@ public class ChatGptAgentService : Service
         }
         else if(request.AgentType != null)
         {
-            agent = feature.CreateAgent(request.AgentType);
+            agent = await feature.CreateAgentAsync(request.AgentType);
             var newAgentData = agent.Data.ConvertTo<StoredAgentData>();
             var id = Db.Insert(newAgentData, selectIdentity: true);
             newAgentData.Id = (int)id;
@@ -282,7 +283,8 @@ public class ChatGptAgentService : Service
         var chatCompletionService = Kernel.GetService<IChatCompletion>();
         var result = await chatCompletionService.GenerateMessageAsync(chatHistory, new ChatRequestSettings
         {
-            Temperature = 0.0
+            Temperature = 0.0,
+            MaxTokens = 512
         });
         var chatResponse = agent.ParseResponse(result);
         
