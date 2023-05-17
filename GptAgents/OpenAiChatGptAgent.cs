@@ -1,6 +1,7 @@
 ﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.Serialization;
+using Microsoft.SemanticKernel.AI.ChatCompletion;
 using ServiceStack;
 using ServiceStack.Logging;
 using SharpToken;
@@ -58,14 +59,18 @@ RESPONSE FORMAT:
         _logger = LogManager.GetLogger(typeof(OpenAiChatGptAgent));
     }
 
+    public AgentChatResponse ParseResponse(string response)
+    {
+        var content = response;
+        var data = content.FromJson<AgentChatResponse>();
+        return data;
+    }
 
-    public async Task<AgentChatResponse> ChatAsync(List<AgentTask> tasks, List<ChatMessage> history,
+    public async Task<ChatHistory> ConstructChat(List<AgentTask> tasks, List<ChatMessage> history,
         Dictionary<string, string> memories, string? userPrompt = null)
     {
-        using HttpClient client = new HttpClient();
         userPrompt += "\nDetermine which next command to use to complete tasks. You *must* respond in the JSON format specified above:";
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
-        
+
         // Construct main prompt
         var sysPrompt= ConstructFullPrompt(tasks);
         
@@ -83,25 +88,11 @@ RESPONSE FORMAT:
                           $"Success Criteria: {task.SuccessCriteria}\n\n";
         }
         currentTokensUsed += GetTokenCount(taskPrompt);
-        var messages = new List<ChatMessage>
-        {
-            new()
-            {
-                Role = "system",
-                Content = sysPrompt
-            },
-            new()
-            {
-                Role = "system",
-                Content = permMemoryPrompt
-            },
-            new ()
-            {
-                Role = "user",
-                Content = taskPrompt
-            }
-        };
-        
+        var result = new ChatHistory();
+        result.Messages.Add(new(ChatHistory.AuthorRoles.System, sysPrompt));
+        result.Messages.Add(new(ChatHistory.AuthorRoles.System, permMemoryPrompt));
+        result.Messages.Add(new (ChatHistory.AuthorRoles.User, taskPrompt));
+
         // Amount for response
         currentTokensUsed += 500;
         var msgHistory = history.Where(x => ValidChatGptRoles.Contains(x.Role))
@@ -116,70 +107,54 @@ RESPONSE FORMAT:
             while (currentTokensUsed < TokenLimit && msgHistory.Count > nextMsgHistoryToAddIndex)
             {
                 var nextMsgHistoryToAdd = msgHistory[nextMsgHistoryToAddIndex];
-                messages.Add(nextMsgHistoryToAdd);
+                result.Messages.Add(new(GetRole(nextMsgHistoryToAdd.Role), nextMsgHistoryToAdd.Content));
                 currentTokensUsed += GetTokenCount(nextMsgHistoryToAdd.Content);
                 nextMsgHistoryToAddIndex++;
             }
         }
         
-        messages.Add(new()
-        {
-            Role = "system",
-            Content = OutputPrompt
-        });
+        result.Messages.Add(new(ChatHistory.AuthorRoles.System, OutputPrompt));
 
-        messages.Add(new ChatMessage
-        {
-            Role = "user",
-            Content = userPrompt
-        });
+        result.Messages.Add(new(ChatHistory.AuthorRoles.User, userPrompt));
 
-        AgentChatResponse data;
-        var requestData = new
-        {
-            model = _model,
-            messages = messages.Select(x => new
-            {
-                x.Role,
-                x.Content
-            }),
-            max_tokens = 500,
-            temperature = 0.0
-        };
-        
-        _logger.Debug($"Chat request: {requestData.messages.Select(x => $"{x.Role}:\n{x.Content}").ToList().Join("\n\n")}");
-        
-        var response = await client.PostAsJsonAsync(BaseUrl, requestData);
-        var responseString = await response.Content.ReadAsStringAsync();
-
-
-        try
-        {
-            if (response.IsSuccessStatusCode == false)
-                throw new Exception($"Error in chat: {responseString}");
-            _logger.Debug($"Chat response: {responseString}");
-            //trim non-json response
-            var result = responseString.FromJson<ChatCompletionResponse>();
-            var content = result.Choices[0].Message.Content;
-            data = content.FromJson<AgentChatResponse>();
-        }
-        catch (Exception e)
-        {
-            _logger.Error($"Error in chat: {responseString}", e);
-            throw;
-        }
-        history.Add(new ChatMessage
-        {
-            Role = "user",
-            Content = userPrompt
-        });
-        history.Add(new ChatMessage
-        {
-            Role = "assistant",
-            Content = data.ToJson()
-        });
-        return data;
+        return result;
     }
+
+    private ChatHistory.AuthorRoles GetRole(string role)
+    {
+        return role switch
+        {
+            "user" => ChatHistory.AuthorRoles.User,
+            "system" => ChatHistory.AuthorRoles.System,
+            "assistant" => ChatHistory.AuthorRoles.Assistant,
+            _ => ChatHistory.AuthorRoles.Unknown
+        };
+    }
+
+    public ChatHistory PrepareChatHistory(List<AgentTask> tasks, List<ChatMessage> history)
+    {
+        var chatHistory = new ChatHistory();
+        chatHistory.AddMessage(ChatHistory.AuthorRoles.System, ConstructFullPrompt(tasks));
+        chatHistory.AddMessage(ChatHistory.AuthorRoles.User, ConstructTaskPrompt(tasks));
+        chatHistory.AppendMessages(history);
+        chatHistory.AddMessage(ChatHistory.AuthorRoles.System,OutputPrompt);
+        return chatHistory;
+    }
+
+    private string ConstructTaskPrompt(List<AgentTask> tasks)
+    {
+        var taskPrompt = "";
+        taskPrompt +=$"\n\nUSER TASKS:\n\n";
+        for (var index = 0; index < tasks.Count; index++)
+        {
+            var task = tasks[index];
+            taskPrompt += $"Task {task.TaskRef}: \"\"\"{task.Prompt}\"\"\"\n" +
+                          $"Success Criteria: {task.SuccessCriteria}\n\n";
+        }
+
+        return taskPrompt;
+    }
+    
     
     /// <summary>
     /// Placeholder calculation for the number of tokens in a string.
@@ -226,6 +201,34 @@ RESPONSE FORMAT:
         return fullPrompt;
     }
     
+}
+
+public static class OpeAiChatGptAgentExtensions
+{
+    public static ChatHistory AppendMessages(this ChatHistory chat, List<ChatMessage> messages)
+    {
+        foreach (var message in messages)
+        {
+            chat.AddMessage(GetRole(message.Role), message.Content);
+        }
+
+        return chat;
+    }
+
+    private static ChatHistory.AuthorRoles GetRole(string role)
+    {
+        switch (role)
+        {
+            case "user":
+                return ChatHistory.AuthorRoles.User;
+            case "assistant":
+                return ChatHistory.AuthorRoles.Assistant;
+            case "system":
+                return ChatHistory.AuthorRoles.System;
+            default:
+                throw new Exception("Invalid role");
+        }
+    }
 }
 
 public class ChatMessage
@@ -306,8 +309,10 @@ public class GptAgentData
 
 public interface ILanguageModelAgent
 {
-    Task<AgentChatResponse> ChatAsync(List<AgentTask> tasks, List<ChatMessage> history,
+    Task<ChatHistory> ConstructChat(List<AgentTask> tasks, List<ChatMessage> history,
         Dictionary<string, string> memories, string? userPrompt = null);
+
+    AgentChatResponse ParseResponse(string response);
     
     GptAgentData Data { get; }
 }

@@ -1,5 +1,11 @@
 ﻿using GptAgents;
 using GptMeetingAgent.ServiceModel;
+using Microsoft.Extensions.Azure;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Connectors.AI.OpenAI.TextEmbedding;
+using Microsoft.SemanticKernel.CoreSkills;
+using Microsoft.SemanticKernel.Memory;
+using Microsoft.SemanticKernel.SemanticFunctions;
 
 [assembly: HostingStartup(typeof(GptMeetingAgent.ConfigureGpt))]
 
@@ -13,14 +19,26 @@ public class ConfigureGpt : IHostingStartup
         {
             var chatGptApiKey = Environment.GetEnvironmentVariable("CHATGPT_API_KEY");
 
+            var kernel = Kernel.Builder
+                .WithMemory(new SemanticTextMemory(
+                    new VolatileMemoryStore(),
+                    new OpenAITextEmbeddingGeneration("text-embedding-ada-002", chatGptApiKey)))
+                .Build();
+            kernel.Config.AddOpenAIChatCompletionService("gpt-3.5-turbo", chatGptApiKey);
+            kernel.ImportSkill(new TimeSkill(), "time");
+            kernel.ImportSkill(new TextMemorySkill());
+            kernel.ImportSemanticSkillFromDirectory("Skills", "GptAgent");
+
+            host.Register(kernel);
+            
             host.Plugins.Add(new GptAgentFeature().RegisterAgent(new GptAgentData
                 {
                     Name = "BookingAgent",
-                    PromptBase = File.ReadAllText($"{Path.Combine("Prompts", "BasePromptExample.txt")}"),
                     Role = @"
 An AI that makes meeting bookings between staff, ensuring their schedules do not have conflicting events.
 Always make bookings in the future.Ensure the booking is on the requested day.
-When checking schedules, check the next 7 days, including today."
+When checking schedules, check the next 7 days, including today.",
+                    PromptBase = File.ReadAllText($"{Path.Combine("Prompts", "BasePromptExample.txt")}")
                 },
                 agentFactory: agentData => new OpenAiChatGptAgent(chatGptApiKey, agentData),
                 includeApis: new()

@@ -23,6 +23,7 @@
   <ItemGroup>
     <PackageReference Include="Bogus" Version="34.0.2" />
     <PackageReference Include="Markdig" Version="0.30.*" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="0.14.547.1-preview" />
     <PackageReference Include="ServiceStack" Version="6.*" />
     <PackageReference Include="ServiceStack.Mvc" Version="6.*" />
     <PackageReference Include="ServiceStack.Server" Version="6.*" />
@@ -51,6 +52,10 @@
   <ItemGroup>
     <None Remove="Prompts\BasePromptExample.txt" />
     <Content Include="Prompts\BasePromptExample.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Remove="Skills\GptAgent\CallServiceCommand\skprompt.txt" />
+    <Content Include="Skills\GptAgent\CallServiceCommand\skprompt.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

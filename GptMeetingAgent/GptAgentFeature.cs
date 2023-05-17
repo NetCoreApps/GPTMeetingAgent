@@ -1,4 +1,6 @@
 ﻿using GptAgents;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Orchestration;
 using ServiceStack.DataAnnotations;
 using ServiceStack.Logging;
 using ServiceStack.NativeTypes.TypeScript;
@@ -7,7 +9,7 @@ namespace GptMeetingAgent;
 
 public class GptAgentFeature : IPlugin, IPostInitPlugin
 {
-    private Dictionary<string, string> AgentServiceCommands { get; set; } = new();
+    public Dictionary<string, string> AgentServiceCommands { get; set; } = new();
     
     private Dictionary<string, List<string>> AgentServiceCommandTags { get; set; } = new();
     

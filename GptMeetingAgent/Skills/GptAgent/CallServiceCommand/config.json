@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "type": "completion",
+  "description": "Call an internal ServiceStack Service Command",
+  "completion": {
+    "max_tokens": 512,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0
+  },
+  "input": {
+    "parameters": [
+      {
+        "name": "commandName",
+        "description": "The command name for the ServiceCommand you want to call",
+        "defaultValue": ""
+      },
+      {
+        "name": "body",
+        "description": "The request body for the ServiceCommand you want to call. This should be a JSON object.",
+        "defaultValue": ""
+      }
+    ]
+  }
+}
