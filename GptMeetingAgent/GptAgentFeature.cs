@@ -159,9 +159,9 @@ public class GptAgentFeature : IPlugin, IPostInitPlugin
     
     private Dictionary<string, GptAgentData> AgentDataMappings { get; set; } = new();
 
-    private Dictionary<string, Func<object,object>> AgentCommandResultFilters { get; set; } = new();
+    private Dictionary<string, Func<object,object,object>> AgentCommandResultFilters { get; set; } = new();
 
-    public GptAgentFeature RegisterCommandTransform<T>(Func<object,object> filter)
+    public GptAgentFeature RegisterCommandTransform<T>(Func<object,object,object> filter)
     {
         var commandName = typeof(T).Name;
         AgentCommandResultFilters[commandName] = filter;
@@ -171,7 +171,7 @@ public class GptAgentFeature : IPlugin, IPostInitPlugin
     public object TransformCommandResponse(AgentCommand? command, object response)
     {
         if (command != null && AgentCommandResultFilters.TryGetValue(command.Name, out var filter))
-            return filter(response);
+            return filter(response,command.Body);
         return response;
     }
 }

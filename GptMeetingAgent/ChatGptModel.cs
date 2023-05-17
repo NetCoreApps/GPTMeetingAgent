@@ -7,7 +7,7 @@ namespace GptMeetingAgent;
 public class ContinueGptAgentTask : IReturn<ContinueGptAgentTaskResponse>
 {
     public int TaskId { get; set; }
-    public AgentCommand? Command { get; set; }
+    public StoredAgentCommand? Command { get; set; }
     public object? CommandResponse { get; set; }
     public string? UserPrompt { get; set; }
 }

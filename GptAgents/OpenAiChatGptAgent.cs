@@ -10,11 +10,8 @@ namespace GptAgents;
 
 public class OpenAiChatGptAgent : ILanguageModelAgent
 {
-    private readonly string _model;
     public GptAgentData Data { get; set; }
     
-    public string ApiKey { get; set; }
-
     public int TokenLimit { get; set; }
     
     public GptEncoding Encoding { get; set; } = GptEncoding.GetEncoding("cl100k_base");
@@ -38,27 +35,12 @@ RESPONSE FORMAT:
         ""speak"": ""thoughts summary to say to user""
     }
 }";
-    
-    protected const string BaseUrl = "https://api.openai.com/v1/chat/completions";
-
-    private ILog? _logger;
-
-    public OpenAiChatGptAgent(string apiKey, GptAgentData data, string model = "gpt-3.5-turbo", int tokenLimit = 4000)
+    public OpenAiChatGptAgent(GptAgentData data, int tokenLimit = 4000)
     {
-        _model = model;
-        ApiKey = apiKey;
         Data = data;
         TokenLimit = tokenLimit;
-        InitLogger();
     }
-
-    private void InitLogger()
-    {
-        if (LogManager.LogFactory == null || !(LogManager.LogFactory is NullLogFactory))
-            LogManager.LogFactory = new ConsoleLogFactory();
-        _logger = LogManager.GetLogger(typeof(OpenAiChatGptAgent));
-    }
-
+    
     public AgentChatResponse ParseResponse(string response)
     {
         var content = response;
@@ -131,31 +113,6 @@ RESPONSE FORMAT:
         };
     }
 
-    public ChatHistory PrepareChatHistory(List<AgentTask> tasks, List<ChatMessage> history)
-    {
-        var chatHistory = new ChatHistory();
-        chatHistory.AddMessage(ChatHistory.AuthorRoles.System, ConstructFullPrompt(tasks));
-        chatHistory.AddMessage(ChatHistory.AuthorRoles.User, ConstructTaskPrompt(tasks));
-        chatHistory.AppendMessages(history);
-        chatHistory.AddMessage(ChatHistory.AuthorRoles.System,OutputPrompt);
-        return chatHistory;
-    }
-
-    private string ConstructTaskPrompt(List<AgentTask> tasks)
-    {
-        var taskPrompt = "";
-        taskPrompt +=$"\n\nUSER TASKS:\n\n";
-        for (var index = 0; index < tasks.Count; index++)
-        {
-            var task = tasks[index];
-            taskPrompt += $"Task {task.TaskRef}: \"\"\"{task.Prompt}\"\"\"\n" +
-                          $"Success Criteria: {task.SuccessCriteria}\n\n";
-        }
-
-        return taskPrompt;
-    }
-    
-    
     /// <summary>
     /// Placeholder calculation for the number of tokens in a string.
     /// Conservative estimate to try and avoid hitting the token limit.
@@ -203,34 +160,6 @@ RESPONSE FORMAT:
     
 }
 
-public static class OpeAiChatGptAgentExtensions
-{
-    public static ChatHistory AppendMessages(this ChatHistory chat, List<ChatMessage> messages)
-    {
-        foreach (var message in messages)
-        {
-            chat.AddMessage(GetRole(message.Role), message.Content);
-        }
-
-        return chat;
-    }
-
-    private static ChatHistory.AuthorRoles GetRole(string role)
-    {
-        switch (role)
-        {
-            case "user":
-                return ChatHistory.AuthorRoles.User;
-            case "assistant":
-                return ChatHistory.AuthorRoles.Assistant;
-            case "system":
-                return ChatHistory.AuthorRoles.System;
-            default:
-                throw new Exception("Invalid role");
-        }
-    }
-}
-
 public class ChatMessage
 {
     public ChatMessage()
@@ -241,16 +170,6 @@ public class ChatMessage
     public string Content { get; set; }
 
     public DateTime Created { get; set; }
-}
-
-public class ChatCompletionResponse
-{
-    public string Id { get; set; }
-    public string Object { get; set; }
-    public int Created { get; set; }
-    public string Model { get; set; }
-    public Usage Usage { get; set; }
-    public List<ChatChoice> Choices { get; set; }
 }
 
 public class ChatChoice

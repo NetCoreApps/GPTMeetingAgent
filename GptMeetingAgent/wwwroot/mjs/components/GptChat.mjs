@@ -25,7 +25,7 @@ export default {
             <div class="flex py-4">
                 <command-tabs class="w-full" v-if="chat.command">
                     <command-tab title="Request">
-                        <div v-if="chat.command" class="w-full">
+                        <div v-if="chat.command.requestDto" class="w-full">
                             <auto-form :type="chat.command.name" v-model="chat.command.requestDto" @success="OnSuccess(chat.storedAgentTaskId, chat.command)" :allow-submit="() => !task.completed" />
                         </div>
                     </command-tab>

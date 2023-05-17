@@ -79,6 +79,7 @@ export default {
         const users = ref([]);
         const cancelTask = ref(false);
         const upcomingMeetings = ref([]);
+        const internalCommands = ['AskQuestion','MemoryAdd','MemoryReplace','MemoryDel'];
         
         onMounted(async () => {
             let taskHistoryResponse = await client.api(new QueryStoredAgentTasks());
@@ -275,7 +276,7 @@ export default {
                 console.log('fullChatHistory', fullChatHistory);
                 for(let i = 0; i < chatHistory.value.length; i++) {
                     let chat = chatHistory.value[i];
-                    if (chat.command != null && chat.role === 'Agent') {
+                    if (chat.command != null && chat.role === 'Agent' && !internalCommands.includes(chat.command.name)) {
                         console.log('chat.command', chat.command)
                         chat.command.requestDto = makeDto(chat.command.name, chat.command.body);
                     }

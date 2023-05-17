@@ -19,15 +19,8 @@ public class ConfigureGpt : IHostingStartup
         {
             var chatGptApiKey = Environment.GetEnvironmentVariable("CHATGPT_API_KEY");
 
-            var kernel = Kernel.Builder
-                .WithMemory(new SemanticTextMemory(
-                    new VolatileMemoryStore(),
-                    new OpenAITextEmbeddingGeneration("text-embedding-ada-002", chatGptApiKey)))
-                .Build();
+            var kernel = Kernel.Builder.Build();
             kernel.Config.AddOpenAIChatCompletionService("gpt-3.5-turbo", chatGptApiKey);
-            kernel.ImportSkill(new TimeSkill(), "time");
-            kernel.ImportSkill(new TextMemorySkill());
-            kernel.ImportSemanticSkillFromDirectory("Skills", "GptAgent");
 
             host.Register(kernel);
             
@@ -40,28 +33,32 @@ Always make bookings in the future.Ensure the booking is on the requested day.
 When checking schedules, check the next 7 days, including today.",
                     PromptBase = File.ReadAllText($"{Path.Combine("Prompts", "BasePromptExample.txt")}")
                 },
-                agentFactory: agentData => new OpenAiChatGptAgent(chatGptApiKey, agentData),
+                agentFactory: agentData => new OpenAiChatGptAgent(agentData),
                 includeApis: new()
                 {
                     Tags.Teams,
                     Tags.Calendar,
                 })
-                .RegisterCommandTransform<SearchUsers>((responseDto) =>
+                .RegisterCommandTransform<SearchUsers>((responseDto,requestDto) =>
                 {
+                    var request = requestDto.ConvertTo<SearchUsers>();
                     var results = responseDto.ConvertTo<SearchUsersResponse>();
                     if (results != null)
                     {
-                        return results.Value.Select(x => new
-                        {
-                            x.DisplayName,
-                            x.Email,
-                            x.Id,
-                        }).ToList();
+                        if(results.Value is { Count: > 0 })
+                            return results.Value.Select(x => new
+                            {
+                                x.DisplayName,
+                                x.Email,
+                                x.Id,
+                            }).ToList();
+                        return $"No users by the name `{request.Name}` found.";
                     }
                     return responseDto;
                 })
-                .RegisterCommandTransform<GetUserSchedule>((responseDto) =>
+                .RegisterCommandTransform<GetUserSchedule>((responseDto,requestDto) =>
                 {
+                    var request = requestDto.ConvertTo<GetUserSchedule>();
                     var results = responseDto.ConvertTo<GetUserScheduleResponse>();
                     if (results != null)
                     {
@@ -79,7 +76,7 @@ When checking schedules, check the next 7 days, including today.",
                     }
                     return responseDto;
                 })
-                .RegisterCommandTransform<CreateCalendarEvent>(responseDto =>
+                .RegisterCommandTransform<CreateCalendarEvent>((responseDto, requestDto) =>
                 {
                     var result = responseDto.ConvertTo<CreateCalendarEventResponse>();
                     if (result != null)

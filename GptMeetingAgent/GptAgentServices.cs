@@ -11,6 +11,10 @@ public class ChatGptAgentService : Service
 {
     public IKernel Kernel { get; set; }
     
+    public ILoggerFactory LoggerFactory { get; set; }
+
+    public ILogger Logger => LoggerFactory.CreateLogger(typeof(ChatGptAgentService));
+    
     /// <summary>
     /// Get a list of all the tasks for a given agent.
     /// </summary>
@@ -160,6 +164,9 @@ public class ChatGptAgentService : Service
                 Content = commandResponse.ToJson(config => config.ExcludeTypeInfo = true) ?? string.Empty,
                 StoredAgentTaskId = agentTask.Id
             });
+            // Save command response to the database.
+            request.Command.Response = request.CommandResponse;
+            await Db.SaveAsync(request.Command);
         }
 
         var agent = feature.CreateAgent(agentData.Name);
@@ -167,11 +174,17 @@ public class ChatGptAgentService : Service
         var chatHistory = await agent.ConstructChat(
             new List<AgentTask> { agentTask },
             localHistory,
-            new()
+            memory,
+            request.UserPrompt
         );
 
+        Logger.LogInformation($"ChatHistory: {chatHistory.ToJson()}");
+        
         var chatCompletionService = Kernel.GetService<IChatCompletion>();
-        var result = await chatCompletionService.GenerateMessageAsync(chatHistory);
+        var result = await chatCompletionService.GenerateMessageAsync(chatHistory, new ChatRequestSettings
+        {
+            Temperature = 0.0
+        });
         var chatResponse = agent.ParseResponse(result);
 
         
@@ -263,9 +276,14 @@ public class ChatGptAgentService : Service
             history,
             new()
         );
+        
+        Logger.LogInformation($"ChatHistory Start: {chatHistory.ToJson()}");
 
         var chatCompletionService = Kernel.GetService<IChatCompletion>();
-        var result = await chatCompletionService.GenerateMessageAsync(chatHistory);
+        var result = await chatCompletionService.GenerateMessageAsync(chatHistory, new ChatRequestSettings
+        {
+            Temperature = 0.0
+        });
         var chatResponse = agent.ParseResponse(result);
         
         var task = await PersistTask(storedAgentTask, agentData);
