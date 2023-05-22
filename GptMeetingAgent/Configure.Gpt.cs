@@ -20,7 +20,8 @@ public class ConfigureGpt : IHostingStartup
             var chatGptApiKey = Environment.GetEnvironmentVariable("CHATGPT_API_KEY");
 
             var kernel = Kernel.Builder.Build();
-            kernel.Config.AddOpenAIChatCompletionService("gpt-3.5-turbo", chatGptApiKey);
+            kernel.Config.AddOobaBoogaApiChatCompletionService("http://localhost:5010/api/v1/generate");
+            //kernel.Config.AddOpenAIChatCompletionService("gpt-3.5-turbo", chatGptApiKey);
 
             host.Register(kernel);
             

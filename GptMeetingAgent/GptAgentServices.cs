@@ -171,9 +171,13 @@ public class ChatGptAgentService : Service
 
         var agent = await feature.CreateAgentAsync(agentData.Name);
         var localHistory = await GetHistoryForGpt(agentTask.Id);
+        var uiHistory = await GetHistoryForUser(agentTask.Id);
+        var commandHistory =
+            await Db.SelectAsync<StoredAgentCommand>(x => Sql.In(x.StoredChatMessageId, uiHistory.Select(y => y.Id)));
         var chatHistory = await agent.ConstructChat(
             new List<AgentTask> { agentTask },
             localHistory,
+            commandHistory.Select(x => x as AgentCommand).ToList(),
             memory,
             request.UserPrompt
         );
@@ -275,6 +279,7 @@ public class ChatGptAgentService : Service
         var chatHistory = await agent.ConstructChat(
             new List<AgentTask> { storedAgentTask },
             history,
+            new(),
             new()
         );
         

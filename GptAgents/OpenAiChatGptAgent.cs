@@ -24,7 +24,7 @@ public class OpenAiChatGptAgent : ILanguageModelAgent
     /// </summary>
     public string OutputPrompt { get; set; } = @"You must *only respond in JSON* format, as described below.
 
-RESPONSE FORMAT:
+## RESPONSE FORMAT
 {
     ""command"": {
         ""name"": ""command name"",
@@ -51,26 +51,29 @@ RESPONSE FORMAT:
         return data;
     }
 
-    public async Task<ChatHistory> ConstructChat(List<AgentTask> tasks, List<ChatMessage> history,
+    public async Task<ChatHistory> ConstructChat(
+        List<AgentTask> tasks, 
+        List<ChatMessage> history,
+        List<AgentCommand> commandHistory,
         Dictionary<string, string> memories, string? userPrompt = null)
     {
-        userPrompt += "\nDetermine which next command to use to complete tasks. You *must* respond in the JSON format specified above:";
+        userPrompt += "\nDetermine which Service Command to use to collect the information you need to complete your tasks. You *must* respond in the JSON format specified above:";
 
         // Construct main prompt
         var sysPrompt= ConstructFullPrompt(tasks);
         
         var currentTokensUsed = GetTokenCount(userPrompt);
         currentTokensUsed += GetTokenCount(sysPrompt);
-        var permMemoryPrompt = $"Permanent memory: \n{memories.Select(x => x.Key + ": " + x.Value).Join("\n")}\n\n";
+        var permMemoryPrompt = $"## Permanent memory \n{memories.Select(x => x.Key + ": " + x.Value).Join("\n")}\n\n";
         currentTokensUsed += GetTokenCount(permMemoryPrompt);
 
         var taskPrompt = "";
-        taskPrompt +=$"\n\nUSER TASKS:\n\n";
+        taskPrompt +=$"\n\n## USER TASKS\n\n";
         for (var index = 0; index < tasks.Count; index++)
         {
             var task = tasks[index];
-            taskPrompt += $"Task {task.TaskRef}: \"\"\"{task.Prompt}\"\"\"\n" +
-                          $"Success Criteria: {task.SuccessCriteria}\n\n";
+            taskPrompt += $"### Task \"\"\"{task.Prompt}\"\"\"\n" +
+                          $"### Success Criteria {task.SuccessCriteria}\n\n";
         }
         currentTokensUsed += GetTokenCount(taskPrompt);
         var result = new ChatHistory();
@@ -275,6 +278,7 @@ public class ConstraintsBlock : Block
 public interface ILanguageModelAgent
 {
     Task<ChatHistory> ConstructChat(List<AgentTask> tasks, List<ChatMessage> history,
+        List<AgentCommand> commandHistory,
         Dictionary<string, string> memories, string? userPrompt = null);
 
     AgentChatResponse ParseResponse(string response);
