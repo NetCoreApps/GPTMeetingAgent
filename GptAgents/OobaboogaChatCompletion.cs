@@ -1,6 +1,8 @@
-﻿using Microsoft.SemanticKernel.AI.TextCompletion;
+﻿using Azure.AI.OpenAI;
+using Microsoft.SemanticKernel.AI.TextCompletion;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.AI.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AI.OpenAI.AzureSdk;
 using ServiceStack;
 using ServiceStack.Text;
 
@@ -54,22 +56,33 @@ public class OobaboogaChatCompletion : ITextCompletion, IChatCompletion
 
         return result?.Results.Select(x => x.Text).Join("\n") ?? string.Empty;
     }
-
-    public async IAsyncEnumerable<string> CompleteStreamAsync(string text, CompleteRequestSettings requestSettings,
-        CancellationToken cancellationToken = new())
-    {
-        var result = await CompleteAsync(text, requestSettings, cancellationToken);
-        yield return result;
-    }
+    
 
     public ChatHistory CreateNewChat(string instructions = "")
     {
         if(!instructions.IsNullOrEmpty())
             return new ChatHistory()
             {
-                Messages = { new ChatHistory.Message(ChatHistory.AuthorRoles.System, instructions) }
+                Messages = { new SKChatMessage(new Azure.AI.OpenAI.ChatMessage(ChatRole.System, instructions)) }
             };
         return new();
+    }
+
+    public Task<IReadOnlyList<IChatResult>> GetChatCompletionsAsync(ChatHistory chat, ChatRequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = new CancellationToken())
+    {
+        throw new NotImplementedException();
+    }
+
+    public async IAsyncEnumerable<IChatStreamingResult> GetStreamingChatCompletionsAsync(ChatHistory chat, ChatRequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = new CancellationToken())
+    {
+        var prompt = "";
+        foreach (var chatMessage in chat.Messages)
+        {
+            yield return new OobaboogaChatStreamingResult(GetMyRole(chatMessage.Role), chatMessage.Content);
+            prompt += $"### {GetRole(chatMessage.Role)} \n{chatMessage.Content}\n";
+        }
     }
 
     public async Task<string> GenerateMessageAsync(ChatHistory chat, ChatRequestSettings? requestSettings = null,
@@ -78,7 +91,7 @@ public class OobaboogaChatCompletion : ITextCompletion, IChatCompletion
         var prompt = "";
         foreach (var chatMessage in chat.Messages)
         {
-            prompt += $"### {GetRole(chatMessage.AuthorRole)} \n{chatMessage.Content}\n";
+            prompt += $"### {GetRole(chatMessage.Role)} \n{chatMessage.Content}\n";
         }
 
         var result = await CompleteAsync(prompt, requestSettings.ConvertTo<CompleteRequestSettings>(),
@@ -116,31 +129,45 @@ public class OobaboogaChatCompletion : ITextCompletion, IChatCompletion
           }".FromJson<OobaBoogaRequest>();
     }
 
-    private static string GetRole(ChatHistory.AuthorRoles role)
+    private static string GetRole(AuthorRole role)
     {
-        switch (role)
+        return role.Label;
+    }
+
+    private static OobaboogaRoles GetMyRole(AuthorRole role)
+    {
+        switch (role.Label)
         {
-            case ChatHistory.AuthorRoles.System:
-                return "System";
-            case ChatHistory.AuthorRoles.User:
-                return "User";
-            case ChatHistory.AuthorRoles.Assistant:
-                return "Assistant";
+            case "user":
+                return OobaboogaRoles.User;
+            case "assistant":
+                return OobaboogaRoles.Assistant;
+            case "system":
+                return OobaboogaRoles.System;
             default:
-                return "Unknown";
+                throw new Exception($"Unexpected role label: {role.Label}");
         }
     }
 
-    public IAsyncEnumerable<string> GenerateMessageStreamAsync(ChatHistory chat, ChatRequestSettings? requestSettings = null,
+    public async IAsyncEnumerable<string> GenerateMessageStreamAsync(ChatHistory chat, ChatRequestSettings? requestSettings = null,
         CancellationToken cancellationToken = new CancellationToken())
     {
-        var prompt = "";
         foreach (var chatMessage in chat.Messages)
         {
-            prompt += $"### {GetRole(chatMessage.AuthorRole)} \n{chatMessage.Content}\n";
+            yield return $"### {GetRole(chatMessage.Role)} \n{chatMessage.Content}\n";
         }
-        
-        return CompleteStreamAsync(prompt, requestSettings.ConvertTo<CompleteRequestSettings>(), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<ITextResult>> GetCompletionsAsync(string text, CompleteRequestSettings requestSettings,
+        CancellationToken cancellationToken = new CancellationToken())
+    {
+        throw new NotImplementedException();
+    }
+
+    public IAsyncEnumerable<ITextStreamingResult> GetStreamingCompletionsAsync(string text, CompleteRequestSettings requestSettings,
+        CancellationToken cancellationToken = new CancellationToken())
+    {
+        throw new NotImplementedException();
     }
 }
 
@@ -181,10 +208,58 @@ public class TextCompletionResponse
 
 public static class TextGenerationExtensions
 {
-    public static KernelConfig AddOobaBoogaApiChatCompletionService(this KernelConfig config, string apiUrl)
+    public static KernelBuilder WithOobaboogaApiChatCompletionService(this KernelBuilder builder, string apiUrl)
     {
-        config.AddTextCompletionService(kernel => new OobaboogaChatCompletion(apiUrl));
-        config.AddChatCompletionService(kernel => new OobaboogaChatCompletion(apiUrl));
-        return config;
+        builder.WithAIService("oobabooga", new OobaboogaChatCompletion(apiUrl));
+        return builder;
     }
+}
+
+public class OobaboogaChatStreamingResult : IChatStreamingResult
+{
+    private readonly ChatMessageBase _message;
+    private readonly OobaboogaRoles _role;
+    
+    public OobaboogaChatStreamingResult(OobaboogaRoles role, string content)
+    {
+        this._role = role;
+        _message = new OobaboogaChatMessage(role, content);
+    }
+    
+    public Task<ChatMessageBase> GetChatMessageAsync(CancellationToken cancellationToken = new CancellationToken())
+    {
+        return Task.FromResult(this._message);
+    }
+
+    public async IAsyncEnumerable<ChatMessageBase> GetStreamingChatMessageAsync(CancellationToken cancellationToken = new CancellationToken())
+    {
+        var streamedOutput = this._message.Content.Split(' ');
+        foreach (string word in streamedOutput)
+        {
+            await Task.Delay(100, cancellationToken);
+            yield return new OobaboogaChatMessage(this._role, $"{word} ");
+        }
+    }
+}
+    
+public class OobaboogaChatMessage : ChatMessageBase
+{
+    public OobaboogaChatMessage(OobaboogaRoles role,string message) : base(new AuthorRole(role.ToString()), message)
+    {
+    }
+}
+
+public class OobaboogaChatHistory : ChatHistory
+{
+    public void AddMessage(OobaboogaRoles role, string message)
+    {
+        Messages.Add(new OobaboogaChatMessage(role, message));
+    }
+}
+    
+public enum OobaboogaRoles
+{
+    System,
+    User,
+    Assistant
 }

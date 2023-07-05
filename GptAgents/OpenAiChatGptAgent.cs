@@ -1,9 +1,11 @@
 ﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.Serialization;
+using Azure.AI.OpenAI;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.AI.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AI.OpenAI.AzureSdk;
 using Microsoft.SemanticKernel.TemplateEngine.Blocks;
 using ServiceStack;
 using ServiceStack.Logging;
@@ -77,9 +79,9 @@ public class OpenAiChatGptAgent : ILanguageModelAgent
         }
         currentTokensUsed += GetTokenCount(taskPrompt);
         var result = new ChatHistory();
-        result.Messages.Add(new(ChatHistory.AuthorRoles.System, sysPrompt));
-        result.Messages.Add(new(ChatHistory.AuthorRoles.System, permMemoryPrompt));
-        result.Messages.Add(new (ChatHistory.AuthorRoles.User, taskPrompt));
+        result.Messages.Add(new SKChatMessage(new Azure.AI.OpenAI.ChatMessage(ChatRole.System, sysPrompt)));
+        result.Messages.Add(new SKChatMessage(new Azure.AI.OpenAI.ChatMessage(ChatRole.System, permMemoryPrompt)));
+        result.Messages.Add(new SKChatMessage(new Azure.AI.OpenAI.ChatMessage(ChatRole.User, taskPrompt)));
 
         // Amount for response
         currentTokensUsed += 500;
@@ -95,27 +97,27 @@ public class OpenAiChatGptAgent : ILanguageModelAgent
             while (currentTokensUsed < TokenLimit && msgHistory.Count > nextMsgHistoryToAddIndex)
             {
                 var nextMsgHistoryToAdd = msgHistory[nextMsgHistoryToAddIndex];
-                result.Messages.Add(new(GetRole(nextMsgHistoryToAdd.Role), nextMsgHistoryToAdd.Content));
+                result.Messages.Add(new SKChatMessage(new Azure.AI.OpenAI.ChatMessage(GetRole(nextMsgHistoryToAdd.Role), nextMsgHistoryToAdd.Content)));
                 currentTokensUsed += GetTokenCount(nextMsgHistoryToAdd.Content);
                 nextMsgHistoryToAddIndex++;
             }
         }
         
-        result.Messages.Add(new(ChatHistory.AuthorRoles.System, OutputPrompt));
+        result.Messages.Add(new SKChatMessage(new Azure.AI.OpenAI.ChatMessage(ChatRole.System,OutputPrompt)));
 
-        result.Messages.Add(new(ChatHistory.AuthorRoles.User, userPrompt));
+        result.Messages.Add(new SKChatMessage(new Azure.AI.OpenAI.ChatMessage(ChatRole.User, userPrompt)));
 
         return result;
     }
 
-    private ChatHistory.AuthorRoles GetRole(string role)
+    private ChatRole GetRole(string role)
     {
         return role switch
         {
-            "user" => ChatHistory.AuthorRoles.User,
-            "system" => ChatHistory.AuthorRoles.System,
-            "assistant" => ChatHistory.AuthorRoles.Assistant,
-            _ => ChatHistory.AuthorRoles.Unknown
+            "user" => ChatRole.User,
+            "system" => ChatRole.System,
+            "assistant" => ChatRole.Assistant,
+            _ => ChatRole.User
         };
     }
 

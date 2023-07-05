@@ -2,10 +2,6 @@
 using GptMeetingAgent.ServiceModel;
 using Microsoft.Extensions.Azure;
 using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.Connectors.AI.OpenAI.TextEmbedding;
-using Microsoft.SemanticKernel.CoreSkills;
-using Microsoft.SemanticKernel.Memory;
-using Microsoft.SemanticKernel.SemanticFunctions;
 
 [assembly: HostingStartup(typeof(GptMeetingAgent.ConfigureGpt))]
 
@@ -19,9 +15,10 @@ public class ConfigureGpt : IHostingStartup
         {
             var chatGptApiKey = Environment.GetEnvironmentVariable("CHATGPT_API_KEY");
 
-            var kernel = Kernel.Builder.Build();
-            kernel.Config.AddOobaBoogaApiChatCompletionService("http://localhost:5010/api/v1/generate");
-            //kernel.Config.AddOpenAIChatCompletionService("gpt-3.5-turbo", chatGptApiKey);
+            var kernel = Kernel.Builder
+                .WithOpenAIChatCompletionService("gpt-3.5-turbo", chatGptApiKey)
+                //.WithOobaboogaApiChatCompletionService("http://localhost:5010/api/v1/generate");
+                .Build();
 
             host.Register(kernel);
             

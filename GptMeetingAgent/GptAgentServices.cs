@@ -160,8 +160,8 @@ public class ChatGptAgentService : Service
             };
             await Db.SaveAsync(new StoredChatMessage
             {
-                Role = "system",
-                Content = commandResponse.ToJson(config => config.ExcludeTypeInfo = true) ?? string.Empty,
+                Role = "user",
+                Content = commandResponse.TextDump() ?? string.Empty,
                 StoredAgentTaskId = agentTask.Id
             });
             // Save command response to the database.
@@ -356,7 +356,7 @@ public class ChatGptAgentService : Service
         await Db.SaveAsync(new StoredChatMessage
         {
             Role = "assistant",
-            Content = chatResponse.Thoughts.ToJson(),
+            Content = chatResponse.Thoughts.Plan,
             StoredAgentTaskId = task.Id
         });
         var chatMessage = new StoredChatMessage
@@ -411,7 +411,7 @@ public class ChatGptAgentService : Service
                     {
                         value = args["value"].Trim(), 
                         description = args.TryGetValue("description", out var arg) ? arg.Trim() : ""
-                    }.ToJson(config => config.ExcludeTypeInfo = true));
+                    }.TextDump());
             }
             if (chatResponse.Command is { Name: "MemoryDel" })
             {
@@ -423,7 +423,7 @@ public class ChatGptAgentService : Service
                 {
                     value = args["value"].Trim(), 
                     description = args.TryGetValue("description", out var arg) ? arg.Trim() : ""
-                }.ToJson(config => config.ExcludeTypeInfo = true));
+                }.TextDump());
             }
 
             skipCommand = true;
