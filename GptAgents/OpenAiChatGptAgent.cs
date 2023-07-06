@@ -232,49 +232,6 @@ public class GptAgentData
     public string PromptBase { get; set; }
     public string Name { get; set; }
     public string Role { get; set; }
-    
-    public ConstraintsBlock Constraints { get; set; }
-    
-}
-
-public class InternalCommandsBlock : Block
-{
-    public InternalCommandsBlock(string? content, ILogger? log = null) : base(content, log)
-    {
-    }
-
-    private static string? BuildContent(string? content)
-    {
-        if (content.IsNullOrEmpty())
-            return null;
-        return @$"COMMANDS:";
-    }
-
-    public override bool IsValid(out string errorMsg)
-    {
-        throw new NotImplementedException();
-    }
-}
-
-public class ConstraintsBlock : Block
-{
-    public ConstraintsBlock(List<string?> constraints, ILogger? log = null) : base(BuildConstraints(constraints), log)
-    {
-    }
-    
-    private static string? BuildConstraints(List<string?> constraints)
-    {
-        if (constraints.IsNullOrEmpty())
-            return null;
-        return @$"CONSTRAINTS: 
-{constraints.Where(x => !x.IsNullOrEmpty()).Select(x => $"- {x}").Join("\n")}";
-    }
-
-    public override bool IsValid(out string errorMsg)
-    {
-        errorMsg = "";
-        return true;
-    }
 }
 
 public interface ILanguageModelAgent
