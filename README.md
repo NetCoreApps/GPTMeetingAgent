@@ -7,22 +7,34 @@ This is a proof of concept application showing the use of OpenAI's APIs and the 
 By leveraging techniques like Chain of Thought, In Context Learning and other Prompt Engineering methods, we are able to customize the Agents behavior.
 The `GptAgentFeature` plugin enables us to use the `RegisterAgent` method to customize this behavior as well as which of your internal ServiceStack each Agent has access to invoke.
 
+## Use of Semantic Kernel
+
+To make it easier to integrate with existing LLM projects, we have switched to using the [Semantic Kernel](https://github.com/microsoft/semantic-kernel) to handle the API integration.
+
 ```csharp
-host.Plugins.Add(new GptAgentFeature().RegisterAgent(new GptAgentData
-{
-    Name = "BookingAgent",
-    PromptBase = File.ReadAllText($"{Path.Combine("Prompts", "BasePromptExample.txt")}"),
-    Role = @"
-    An AI that makes meeting bookings between staff, ensuring their schedules do not have conflicting events.
-    Always make bookings in the future.Ensure the booking is on the requested day.
-    When checking schedules, check the next 7 days, including today."
-},
-agentFactory: agentData => new OpenAiChatGptAgent(chatGptApiKey, agentData),
-includeApis: new()
-{
-    Tags.Teams,
-    Tags.Calendar,
-})
+var kernel = Kernel.Builder
+    .WithOpenAIChatCompletionService("gpt-3.5-turbo", chatGptApiKey)
+    .Build();
+
+host.Register(kernel);
+```
+
+```csharp
+host.Plugins.Add(new GptAgentFeature(kernel).RegisterAgent(new GptAgentData
+    {
+        Name = "BookingAgent",
+        Role = @"
+An AI that makes meeting bookings between staff, ensuring their schedules do not have conflicting events.
+Always make bookings in the future.Ensure the booking is on the requested day.
+When checking schedules, check the next 7 days, including today.",
+        PromptBase = File.ReadAllText($"{Path.Combine("Prompts", "BasePromptExample.txt")}")
+    },
+    agentFactory: agentData => new OpenAiChatGptAgent(agentData),
+    includeApis: new()
+    {
+        Tags.Teams,
+        Tags.Calendar,
+    })
 ```
 
 The `Role` property on the `GptAgentData` primes the Agent to work on a specific task, in this case booking a meeting between two staff members.
