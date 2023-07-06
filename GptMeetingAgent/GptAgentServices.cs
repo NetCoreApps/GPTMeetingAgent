@@ -1,10 +1,20 @@
 ﻿using GptAgents;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.AI.ChatCompletion;
+using Microsoft.SemanticKernel.Planning;
+using Microsoft.SemanticKernel.Planning.Sequential;
 using ServiceStack.OrmLite;
 
 namespace GptMeetingAgent;
 
 public class ChatGptAgentService : Service
 {
+    public IKernel Kernel { get; set; }
+    
+    public ILoggerFactory LoggerFactory { get; set; }
+
+    public ILogger Logger => LoggerFactory.CreateLogger(typeof(ChatGptAgentService));
+    
     /// <summary>
     /// Get a list of all the tasks for a given agent.
     /// </summary>
@@ -34,7 +44,7 @@ public class ChatGptAgentService : Service
     public async Task<object> Post(CreateStoredAgent request)
     {
         var feature = HostContext.GetPlugin<GptAgentFeature>();
-        var agent = feature.CreateAgent(request.AgentType);
+        var agent = await feature.CreateAgentAsync(request.AgentType);
         var agentData = agent.Data.ConvertTo<StoredAgentData>();
         var agentId = await Db.InsertAsync(agentData, selectIdentity: true);
         agentData.Id = (int)agentId;
@@ -78,13 +88,13 @@ public class ChatGptAgentService : Service
     /// </summary>
     /// <param name="taskId"></param>
     /// <returns></returns>
-    private async Task<List<StoredChatMessage>> GetHistoryForGpt(int taskId)
+    private async Task<List<ChatMessage>> GetHistoryForGpt(int taskId)
     {
         var query = Db.From<StoredChatMessage>()
             .Where(x => x.StoredAgentTaskId == taskId)
             .Where(x => Sql.In(x.Role, OpenAiChatGptAgent.ValidChatGptRoles))
             .OrderBy(x => x.Id);
-        return (await Db.SelectAsync(query)).ToList();
+        return (await Db.SelectAsync(query)).ToList().Select(x => x as ChatMessage).ToList();
     }
 
     private readonly List<string> _userChatMessageRoles = new()
@@ -150,20 +160,38 @@ public class ChatGptAgentService : Service
             };
             await Db.SaveAsync(new StoredChatMessage
             {
-                Role = "system",
-                Content = commandResponse.ToJson(config => config.ExcludeTypeInfo = true) ?? string.Empty,
+                Role = "user",
+                Content = commandResponse.TextDump() ?? string.Empty,
                 StoredAgentTaskId = agentTask.Id
             });
+            // Save command response to the database.
+            request.Command.Response = request.CommandResponse;
+            await Db.SaveAsync(request.Command);
         }
 
-        var agent = feature.CreateAgent(agentData.Name);
-        var chatHistory = await GetHistoryForGpt(agentTask.Id);
-        var chatResponse = await agent.ChatAsync(
+        var agent = await feature.CreateAgentAsync(agentData.Name);
+        var localHistory = await GetHistoryForGpt(agentTask.Id);
+        var uiHistory = await GetHistoryForUser(agentTask.Id);
+        var commandHistory =
+            await Db.SelectAsync<StoredAgentCommand>(x => Sql.In(x.StoredChatMessageId, uiHistory.Select(y => y.Id)));
+        var chatHistory = await agent.ConstructChat(
             new List<AgentTask> { agentTask },
-            chatHistory.ConvertAll(x => x.ConvertTo<ChatMessage>()),
+            localHistory,
+            commandHistory.Select(x => x as AgentCommand).ToList(),
             memory,
-            userPrompt: request.UserPrompt.IsNullOrEmpty() ? null : request.UserPrompt
+            request.UserPrompt
         );
+
+        Logger.LogInformation($"ChatHistory: {chatHistory.ToJson()}");
+        
+        var chatCompletionService = Kernel.GetService<IChatCompletion>();
+        var result = await chatCompletionService.GenerateMessageAsync(chatHistory, new ChatRequestSettings
+        {
+            Temperature = 0.0,
+            MaxTokens = 512
+        });
+        var chatResponse = agent.ParseResponse(result);
+
         
         var command = await PersistInteraction(request.UserPrompt, agentTask, chatResponse);
         var skipCommand = HandleInternalCommands(chatResponse, agentTask);
@@ -213,7 +241,8 @@ public class ChatGptAgentService : Service
     public async Task<object> Post(StartGptAgentTask request)
     {
         var feature = HostContext.GetPlugin<GptAgentFeature>();
-        ILanguageModelAgent? agent;
+        ILanguageModelAgent agent;
+        
         int agentId;
         if (request.AgentId != null)
         {
@@ -223,7 +252,7 @@ public class ChatGptAgentService : Service
         }
         else if(request.AgentType != null)
         {
-            agent = feature.CreateAgent(request.AgentType);
+            agent = await feature.CreateAgentAsync(request.AgentType);
             var newAgentData = agent.Data.ConvertTo<StoredAgentData>();
             var id = Db.Insert(newAgentData, selectIdentity: true);
             newAgentData.Id = (int)id;
@@ -235,7 +264,7 @@ public class ChatGptAgentService : Service
         }
 
         var agentData = await Db.SingleByIdAsync<StoredAgentData>(agentId);
-        
+
         var storedAgentTask = new StoredAgentTask
         {
             Prompt = request.Prompt,
@@ -247,11 +276,22 @@ public class ChatGptAgentService : Service
         // History empty when creating a new agent task.
         // Memory also empty when create a new agent task.
         var history = new List<ChatMessage>();
-        var chatResponse = await agent.ChatAsync(
+        var chatHistory = await agent.ConstructChat(
             new List<AgentTask> { storedAgentTask },
             history,
+            new(),
             new()
         );
+        
+        Logger.LogInformation($"ChatHistory Start: {chatHistory.ToJson()}");
+
+        var chatCompletionService = Kernel.GetService<IChatCompletion>();
+        var result = await chatCompletionService.GenerateMessageAsync(chatHistory, new ChatRequestSettings
+        {
+            Temperature = 0.0,
+            MaxTokens = 512
+        });
+        var chatResponse = agent.ParseResponse(result);
         
         var task = await PersistTask(storedAgentTask, agentData);
         var command = await PersistInteraction(request.Prompt, task, chatResponse);
@@ -316,7 +356,7 @@ public class ChatGptAgentService : Service
         await Db.SaveAsync(new StoredChatMessage
         {
             Role = "assistant",
-            Content = chatResponse.Thoughts.ToJson(),
+            Content = chatResponse.Thoughts.Plan,
             StoredAgentTaskId = task.Id
         });
         var chatMessage = new StoredChatMessage
@@ -371,7 +411,7 @@ public class ChatGptAgentService : Service
                     {
                         value = args["value"].Trim(), 
                         description = args.TryGetValue("description", out var arg) ? arg.Trim() : ""
-                    }.ToJson(config => config.ExcludeTypeInfo = true));
+                    }.TextDump());
             }
             if (chatResponse.Command is { Name: "MemoryDel" })
             {
@@ -383,7 +423,7 @@ public class ChatGptAgentService : Service
                 {
                     value = args["value"].Trim(), 
                     description = args.TryGetValue("description", out var arg) ? arg.Trim() : ""
-                }.ToJson(config => config.ExcludeTypeInfo = true));
+                }.TextDump());
             }
 
             skipCommand = true;

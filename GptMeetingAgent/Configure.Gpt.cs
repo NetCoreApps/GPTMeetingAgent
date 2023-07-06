@@ -1,5 +1,7 @@
 ﻿using GptAgents;
 using GptMeetingAgent.ServiceModel;
+using Microsoft.Extensions.Azure;
+using Microsoft.SemanticKernel;
 
 [assembly: HostingStartup(typeof(GptMeetingAgent.ConfigureGpt))]
 
@@ -13,37 +15,48 @@ public class ConfigureGpt : IHostingStartup
         {
             var chatGptApiKey = Environment.GetEnvironmentVariable("CHATGPT_API_KEY");
 
-            host.Plugins.Add(new GptAgentFeature().RegisterAgent(new GptAgentData
+            var kernel = Kernel.Builder
+                .WithOpenAIChatCompletionService("gpt-3.5-turbo", chatGptApiKey)
+                //.WithOobaboogaApiChatCompletionService("http://localhost:5010/api/v1/generate");
+                .Build();
+
+            host.Register(kernel);
+            
+            host.Plugins.Add(new GptAgentFeature(kernel).RegisterAgent(new GptAgentData
                 {
                     Name = "BookingAgent",
-                    PromptBase = File.ReadAllText($"{Path.Combine("Prompts", "BasePromptExample.txt")}"),
                     Role = @"
 An AI that makes meeting bookings between staff, ensuring their schedules do not have conflicting events.
 Always make bookings in the future.Ensure the booking is on the requested day.
-When checking schedules, check the next 7 days, including today."
+When checking schedules, check the next 7 days, including today.",
+                    PromptBase = File.ReadAllText($"{Path.Combine("Prompts", "BasePromptExample.txt")}")
                 },
-                agentFactory: agentData => new OpenAiChatGptAgent(chatGptApiKey, agentData),
+                agentFactory: agentData => new OpenAiChatGptAgent(agentData),
                 includeApis: new()
                 {
                     Tags.Teams,
                     Tags.Calendar,
                 })
-                .RegisterCommandTransform<SearchUsers>((responseDto) =>
+                .RegisterCommandTransform<SearchUsers>((responseDto,requestDto) =>
                 {
+                    var request = requestDto.ConvertTo<SearchUsers>();
                     var results = responseDto.ConvertTo<SearchUsersResponse>();
                     if (results != null)
                     {
-                        return results.Value.Select(x => new
-                        {
-                            x.DisplayName,
-                            x.Email,
-                            x.Id,
-                        }).ToList();
+                        if(results.Value is { Count: > 0 })
+                            return results.Value.Select(x => new
+                            {
+                                x.DisplayName,
+                                x.Email,
+                                x.Id,
+                            }).ToList();
+                        return $"No users by the name `{request.Name}` found.";
                     }
                     return responseDto;
                 })
-                .RegisterCommandTransform<GetUserSchedule>((responseDto) =>
+                .RegisterCommandTransform<GetUserSchedule>((responseDto,requestDto) =>
                 {
+                    var request = requestDto.ConvertTo<GetUserSchedule>();
                     var results = responseDto.ConvertTo<GetUserScheduleResponse>();
                     if (results != null)
                     {
@@ -61,7 +74,7 @@ When checking schedules, check the next 7 days, including today."
                     }
                     return responseDto;
                 })
-                .RegisterCommandTransform<CreateCalendarEvent>(responseDto =>
+                .RegisterCommandTransform<CreateCalendarEvent>((responseDto, requestDto) =>
                 {
                     var result = responseDto.ConvertTo<CreateCalendarEventResponse>();
                     if (result != null)
