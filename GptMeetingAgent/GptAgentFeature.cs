@@ -1,11 +1,8 @@
 ﻿using GptAgents;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Orchestration;
-using Microsoft.SemanticKernel.TemplateEngine.Blocks;
 using ServiceStack.DataAnnotations;
-using ServiceStack.Logging;
 using ServiceStack.NativeTypes.TypeScript;
-using ServiceStack.Text;
 
 namespace GptMeetingAgent;
 
