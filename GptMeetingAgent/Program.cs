@@ -20,7 +20,7 @@ else
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-Licensing.RegisterLicense("Individual (c) 2023 Darren Reid Pl4FF/yGVm+ySUXKhKUihKJcrfX2nLgI+7niHG4prhfjj2cFJw/lwSsom24PxPHl6faP7xJeAGdUQ+P6+PGUpSun53l09o4KRyjyVoKC4mU5Z3p3KdiyS8l1JB4sL5DxZXqIi/E25RyJ22Gtc8Enp3H2hOwpCFieg68pfA1Qx8k=");
+Licensing.RegisterLicense("OSS GPL-3.0 2024 https://github.com/NetCoreApps/GPTMeetingAgent Mst6bPhkcnZJZYYAUoPDOQr7rpfFXUB8bqGZYkqTSfdP0tWzAxhQ3jHKD+Oi1+D74kFFWDNd3N5eMQbHOK7B84wXtq77gGFtafsyB6OrWm2krB586avvxemZC06mcdbhgKc/medZSfMncWaXuwe2MVdl0/xyXBEOc6g9p874D44=");
 
 app.UseServiceStack(new AppHost());
 
